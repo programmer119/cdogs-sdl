@@ -34,11 +34,103 @@
 			font-size: 13px;
 			pointer-events: none;
 		}
+
+		#touch-controls {
+			position: fixed;
+			inset: 0;
+			display: none;
+			pointer-events: none;
+			touch-action: none;
+			user-select: none;
+		}
+
+		.touch-cluster {
+			position: absolute;
+			display: grid;
+			gap: 8px;
+			pointer-events: auto;
+		}
+
+		.touch-dpad {
+			left: 18px;
+			bottom: 18px;
+			grid-template-columns: repeat(3, 54px);
+			grid-template-rows: repeat(3, 54px);
+		}
+
+		.touch-actions {
+			right: 18px;
+			bottom: 24px;
+			grid-template-columns: repeat(2, 62px);
+			grid-template-rows: repeat(2, 62px);
+			align-items: center;
+		}
+
+		.touch-menu {
+			top: 10px;
+			right: 10px;
+			grid-template-columns: repeat(3, minmax(48px, auto));
+		}
+
+		.touch-button {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 48px;
+			min-height: 48px;
+			border: 1px solid rgba(255, 255, 255, 0.35);
+			border-radius: 8px;
+			background: rgba(20, 20, 20, 0.58);
+			color: #fff;
+			font: 700 14px/1 system-ui, sans-serif;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+			-webkit-tap-highlight-color: transparent;
+		}
+
+		.touch-button:active,
+		.touch-button.is-down {
+			background: rgba(118, 96, 210, 0.82);
+			transform: translateY(1px);
+		}
+
+		.touch-spacer {
+			pointer-events: none;
+		}
+
+		@media (hover: none), (pointer: coarse) {
+			#touch-controls {
+				display: block;
+			}
+		}
 	</style>
 </head>
 <body>
 	<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 	<div id="status">Loading...</div>
+	<div id="touch-controls" aria-hidden="true">
+		<div class="touch-cluster touch-menu">
+			<button class="touch-button" data-key="Enter">START</button>
+			<button class="touch-button" data-key="Tab">MAP</button>
+			<button class="touch-button" data-key="Escape">ESC</button>
+		</div>
+		<div class="touch-cluster touch-dpad">
+			<span class="touch-spacer"></span>
+			<button class="touch-button" data-key="ArrowUp">UP</button>
+			<span class="touch-spacer"></span>
+			<button class="touch-button" data-key="ArrowLeft">LEFT</button>
+			<span class="touch-spacer"></span>
+			<button class="touch-button" data-key="ArrowRight">RIGHT</button>
+			<span class="touch-spacer"></span>
+			<button class="touch-button" data-key="ArrowDown">DOWN</button>
+			<span class="touch-spacer"></span>
+		</div>
+		<div class="touch-cluster touch-actions">
+			<button class="touch-button" data-key="Backspace">G</button>
+			<button class="touch-button" data-key="AltLeft">B</button>
+			<span class="touch-spacer"></span>
+			<button class="touch-button" data-key="ControlLeft">A</button>
+		</div>
+	</div>
 	<script>
 		var Module = {
 			canvas: document.getElementById("canvas"),
@@ -62,6 +154,80 @@
 		window.addEventListener("unhandledrejection", function(event) {
 			Module.setStatus(event.reason && event.reason.message ? event.reason.message : String(event.reason));
 		});
+		(function() {
+			var keyInfo = {
+				ArrowUp: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
+				ArrowDown: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
+				ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
+				ArrowRight: { key: "ArrowRight", code: "ArrowRight", keyCode: 39 },
+				ControlLeft: { key: "Control", code: "ControlLeft", keyCode: 17, ctrlKey: true },
+				AltLeft: { key: "Alt", code: "AltLeft", keyCode: 18, altKey: true },
+				Backspace: { key: "Backspace", code: "Backspace", keyCode: 8 },
+				Tab: { key: "Tab", code: "Tab", keyCode: 9 },
+				Enter: { key: "Enter", code: "Enter", keyCode: 13 },
+				Escape: { key: "Escape", code: "Escape", keyCode: 27 }
+			};
+			var pressed = new Map();
+
+			function sendKey(type, name) {
+				var info = keyInfo[name];
+				if (!info) return;
+				var event = new KeyboardEvent(type, {
+					key: info.key,
+					code: info.code,
+					keyCode: info.keyCode,
+					which: info.keyCode,
+					bubbles: true,
+					cancelable: true,
+					ctrlKey: !!info.ctrlKey,
+					altKey: !!info.altKey
+				});
+				Object.defineProperty(event, "keyCode", { get: function() { return info.keyCode; } });
+				Object.defineProperty(event, "which", { get: function() { return info.keyCode; } });
+				Module.canvas.dispatchEvent(event);
+				window.dispatchEvent(event);
+				document.dispatchEvent(event);
+			}
+
+			function press(button, pointerId) {
+				var key = button.dataset.key;
+				if (!key || pressed.has(pointerId)) return;
+				pressed.set(pointerId, { key: key, button: button });
+				button.classList.add("is-down");
+				Module.canvas.focus();
+				sendKey("keydown", key);
+			}
+
+			function release(pointerId) {
+				var state = pressed.get(pointerId);
+				if (!state) return;
+				pressed.delete(pointerId);
+				state.button.classList.remove("is-down");
+				sendKey("keyup", state.key);
+			}
+
+			document.querySelectorAll(".touch-button").forEach(function(button) {
+				button.addEventListener("pointerdown", function(event) {
+					event.preventDefault();
+					button.setPointerCapture(event.pointerId);
+					press(button, event.pointerId);
+				});
+				button.addEventListener("pointerup", function(event) {
+					event.preventDefault();
+					release(event.pointerId);
+				});
+				button.addEventListener("pointercancel", function(event) {
+					release(event.pointerId);
+				});
+				button.addEventListener("lostpointercapture", function(event) {
+					release(event.pointerId);
+				});
+			});
+
+			window.addEventListener("blur", function() {
+				Array.from(pressed.keys()).forEach(release);
+			});
+		})();
 	</script>
 	<script src="index.js"></script>
 </body>
