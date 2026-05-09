@@ -42,6 +42,8 @@
 			pointer-events: none;
 			touch-action: none;
 			user-select: none;
+			-webkit-touch-callout: none;
+			-webkit-user-select: none;
 		}
 
 		.touch-cluster {
@@ -105,7 +107,11 @@
 			text-align: center;
 			white-space: normal;
 			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+			touch-action: none;
+			user-select: none;
 			-webkit-tap-highlight-color: transparent;
+			-webkit-touch-callout: none;
+			-webkit-user-select: none;
 		}
 
 		.touch-button:active,
@@ -138,7 +144,7 @@
 			<div class="joystick-knob" id="move-stick-knob"></div>
 		</div>
 		<div class="touch-cluster touch-actions">
-			<button class="touch-button" data-key="KeyS">GRENADE</button>
+			<button class="touch-button" type="button" data-key="KeyS">THROW</button>
 			<button class="touch-button" data-key="KeyZ">SWITCH<br>DASH</button>
 			<span class="touch-spacer"></span>
 			<button class="touch-button" data-key="KeyX">FIRE</button>
