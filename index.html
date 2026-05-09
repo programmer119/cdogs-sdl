@@ -54,8 +54,27 @@
 		.touch-dpad {
 			left: 18px;
 			bottom: 18px;
-			grid-template-columns: repeat(3, 54px);
-			grid-template-rows: repeat(3, 54px);
+			width: 150px;
+			height: 150px;
+			border: 1px solid rgba(255, 255, 255, 0.32);
+			border-radius: 50%;
+			background: rgba(20, 20, 20, 0.42);
+			box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+			touch-action: none;
+		}
+
+		.joystick-knob {
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			width: 62px;
+			height: 62px;
+			border: 1px solid rgba(255, 255, 255, 0.42);
+			border-radius: 50%;
+			background: rgba(118, 96, 210, 0.78);
+			box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+			transform: translate(-50%, -50%);
+			will-change: transform;
 		}
 
 		.touch-actions {
@@ -115,16 +134,8 @@
 			<button class="touch-button" data-key="KeyA">MAP</button>
 			<button class="touch-button" data-key="Escape">ESC</button>
 		</div>
-		<div class="touch-cluster touch-dpad">
-			<span class="touch-spacer"></span>
-			<button class="touch-button" data-key="ArrowUp">UP</button>
-			<span class="touch-spacer"></span>
-			<button class="touch-button" data-key="ArrowLeft">LEFT</button>
-			<span class="touch-spacer"></span>
-			<button class="touch-button" data-key="ArrowRight">RIGHT</button>
-			<span class="touch-spacer"></span>
-			<button class="touch-button" data-key="ArrowDown">DOWN</button>
-			<span class="touch-spacer"></span>
+		<div class="touch-cluster touch-dpad" id="move-stick">
+			<div class="joystick-knob" id="move-stick-knob"></div>
 		</div>
 		<div class="touch-cluster touch-actions">
 			<button class="touch-button" data-key="KeyS">GRENADE</button>
@@ -212,6 +223,71 @@
 				sendKey("keyup", state.key);
 			}
 
+			var joystick = document.getElementById("move-stick");
+			var joystickKnob = document.getElementById("move-stick-knob");
+			var joystickPointer = null;
+			var joystickKeys = new Set();
+
+			function setJoystickKeys(nextKeys) {
+				var next = new Set(nextKeys);
+				joystickKeys.forEach(function(key) {
+					if (!next.has(key)) sendKey("keyup", key);
+				});
+				next.forEach(function(key) {
+					if (!joystickKeys.has(key)) sendKey("keydown", key);
+				});
+				joystickKeys = next;
+			}
+
+			function updateJoystick(event) {
+				var rect = joystick.getBoundingClientRect();
+				var centerX = rect.left + rect.width / 2;
+				var centerY = rect.top + rect.height / 2;
+				var dx = event.clientX - centerX;
+				var dy = event.clientY - centerY;
+				var max = rect.width * 0.32;
+				var distance = Math.hypot(dx, dy);
+				if (distance > max) {
+					dx = dx / distance * max;
+					dy = dy / distance * max;
+				}
+				joystickKnob.style.transform = "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px))";
+
+				var deadZone = rect.width * 0.11;
+				var keys = [];
+				if (Math.abs(dx) > deadZone) keys.push(dx < 0 ? "ArrowLeft" : "ArrowRight");
+				if (Math.abs(dy) > deadZone) keys.push(dy < 0 ? "ArrowUp" : "ArrowDown");
+				setJoystickKeys(keys);
+			}
+
+			function releaseJoystick() {
+				joystickPointer = null;
+				joystickKnob.style.transform = "translate(-50%, -50%)";
+				setJoystickKeys([]);
+			}
+
+			joystick.addEventListener("pointerdown", function(event) {
+				event.preventDefault();
+				joystickPointer = event.pointerId;
+				joystick.setPointerCapture(event.pointerId);
+				Module.canvas.focus();
+				updateJoystick(event);
+			});
+			joystick.addEventListener("pointermove", function(event) {
+				if (event.pointerId !== joystickPointer) return;
+				event.preventDefault();
+				updateJoystick(event);
+			});
+			joystick.addEventListener("pointerup", function(event) {
+				if (event.pointerId === joystickPointer) releaseJoystick();
+			});
+			joystick.addEventListener("pointercancel", function(event) {
+				if (event.pointerId === joystickPointer) releaseJoystick();
+			});
+			joystick.addEventListener("lostpointercapture", function(event) {
+				if (event.pointerId === joystickPointer) releaseJoystick();
+			});
+
 			document.querySelectorAll(".touch-button").forEach(function(button) {
 				button.addEventListener("pointerdown", function(event) {
 					event.preventDefault();
@@ -232,6 +308,7 @@
 
 			window.addEventListener("blur", function() {
 				Array.from(pressed.keys()).forEach(release);
+				releaseJoystick();
 			});
 		})();
 	</script>
